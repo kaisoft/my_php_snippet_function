@@ -1,102 +1,64 @@
 <?php
 /**
- * Get detailed path information of the file that called this function.
+ * ฟังก์ชัน getCallerPathInfo
  *
- * This function returns an associative array containing various details about the
- * file which invoked this function, such as dirname, basename, filename (without extension),
- * extension, full path info, and optionally server environment info.
- * 
- * It uses debug_backtrace() to determine the caller file, making it useful even when called
- * from an included or required file.
+ * ประโยชน์: ใช้สำหรับดึงข้อมูลตำแหน่งไฟล์ที่เรียกฟังก์ชันนี้ (หรือระดับ stack trace ที่ระบุ)
+ *  เพื่อช่วยในการ debug หรือเก็บข้อมูล context ของการเรียกใช้งาน เช่น Path, File, ชื่อโฟลเดอร์, และข้อมูล server ที่เกี่ยวข้อง
  *
- * @param bool $includeServerInfo Optional. Set to true to include server-related info 
- *                                (e.g., DOCUMENT_ROOT, SERVER_NAME). Default is false.
- * 
- * @return array|null Returns an associative array with path details and optionally server info.
- *                    Returns null if caller file is not found or invalid.
+ * วิธีใช้:
+ *   - ส่ง parameter $level เป็นจำนวนเต็ม เพื่อเลือกระดับของ backtrace stack ที่ต้องการดู (0 = ฟังก์ชันนี้เอง, 1 = ฟังก์ชันที่เรียกมา, ...)
+ *   - คืนค่าเป็น array ที่ประกอบด้วยข้อมูลเกี่ยวกับพาธไฟล์และ server
  *
- * @example
- * <code>
- * print_r(getCallerPathInfo(true));
- * </code>
+ * @param int $level (optional) ระบุระดับของ backtrace stack (default = 0)
+ * @return array ข้อมูลตำแหน่งไฟล์และ server ที่เกี่ยวข้อง
  */
-function getCallerPathInfo($includeServerInfo = false) {
-    // Get the debug backtrace to find caller info
-    $trace = debug_backtrace();
-
-    // The caller is the second element in the backtrace array
-    $caller = isset($trace[1]) ? $trace[11] : null;
-
-    if (!$caller || !isset($caller['file'])) {
-        // No caller info found, return null
-        return null;
+function getCallerPathInfo($level = 0) {
+    // ตรวจสอบให้แน่ใจว่า $level เป็น int และไม่ติดลบ
+    if (!is_int($level) || $level < 0) {
+        $level = 0;  // กรณีผิดพลาด ตั้งกลับเป็น 0
     }
 
-    // Resolve the realpath of the caller file to avoid symbolic link issues
-    $callerFile = realpath($caller['file']);
+    // ดึง debug backtrace โดยไม่คืนค่าพารามิเตอร์ argument
+    // ทำให้ได้ข้อมูลแค่การเรียกฟังก์ชัน, ไฟล์, และบรรทัดที่เรียก
+    $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
 
-    // Validate that the resolved path exists and is a file
-    if ($callerFile === false || !is_file($callerFile)) {
-        // Invalid file path, return null to indicate failure
-        return null;
+    // ตรวจสอบว่า $level มีอยู่ใน backtrace จริงหรือไม่
+    if (!isset($trace[$level])) {
+        $level = 0; // ถ้าไม่มีใช้ค่า 0 แทน
     }
 
-    // Initialize the result array to hold path details
-    $result = array();
+    $traceInfo = $trace[$level];
 
-    // Directory part of the file path
-    $dirname = dirname($callerFile);
-    $result['dirname'] = $dirname;
+    // อ่านไฟล์ที่ stack trace ชั้นนี้ชี้ไป ถ้าไม่มีให้เป็นค่าว่าง
+    $filePath = isset($traceInfo['file']) ? $traceInfo['file'] : '';
 
-    // Basename (file name with extension)
-    $basename = basename($callerFile);
-    $result['basename'] = $basename;
-
-    // File extension
-    $extension = pathinfo($callerFile, PATHINFO_EXTENSION);
-    $result['extension'] = $extension;
-
-    // Filename without extension
-    if ($extension !== '') {
-        $filename = substr($basename, 0, strrpos($basename, '.'));
-    } else {
-        $filename = $basename;
-    }
-    $result['filename'] = $filename;
-
-    // Full path info as returned by pathinfo
-    $result['pathinfo'] = pathinfo($callerFile);
-
-    // Optionally include server environment information
-    if ($includeServerInfo) {
-        $result['server'] = array(
-            'document_root' => isset($_SERVER['DOCUMENT_ROOT']) ? $_SERVER['DOCUMENT_ROOT'] : '',
-            'server_name'   => isset($_SERVER['SERVER_NAME']) ? $_SERVER['SERVER_NAME'] : '',
-            'server_addr'   => isset($_SERVER['SERVER_ADDR']) ? $_SERVER['SERVER_ADDR'] : '',
-            'remote_addr'   => isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : '',
-        );
-    } else {
-        // If not included, set to null to avoid accidental info leakage
-        $result['server'] = null;
+    // ถ้าไม่มีไฟล์เลย (เช่น function internal) ให้ return ว่าง
+    if (empty($filePath)) {
+        return [];
     }
 
-    // Calculate folders as an array representing folder hierarchy relative to document root
-    $folders = array();
-    if ($includeServerInfo && !empty($result['server']['document_root'])) {
-        $docRoot = realpath($result['server']['document_root']);
-        $realDir = realpath($dirname);
-        if ($docRoot !== false && $realDir !== false && strpos($realDir, $docRoot) === 0) {
-            // Get relative path by trimming document root from filename path
-            $relativePath = substr($realDir, strlen($docRoot));
-            $relativePath = trim($relativePath, DIRECTORY_SEPARATOR);
-            if ($relativePath != '') {
-                $folders = explode(DIRECTORY_SEPARATOR, $relativePath);
-            }
-        }
-    }
-    $result['folders'] = $folders;
+    // หาตำแหน่งโฟลเดอร์ของไฟล์นี้
+    $dirPath = dirname($filePath);
 
-    // Return the assembled array of path and optionally server info
+    // แยกโฟลเดอร์เป็นแต่ละชั้นใน array แบนราบ
+    // เช่น "/home/site/domains" => ['home','site','domains']
+    $folders = explode(DIRECTORY_SEPARATOR, trim($dirPath, DIRECTORY_SEPARATOR));
+
+    // เก็บโฟลเดอร์ชื่อแยกชั้นเป็น array แบนราบ ไม่ซ้อน array
+    $folder_name = $folders;
+
+    // รวมผลลัพธ์ทั้งหมดเป็น array เพื่อใช้ต่อ
+    $result = [
+        'dirname' => $dirPath,                                         // path ของโฟลเดอร์ที่ไฟล์อยู่
+        'basename' => basename($filePath),                             // ชื่อไฟล์พร้อมนามสกุล
+        'extension' => pathinfo($filePath, PATHINFO_EXTENSION),        // นามสกุลไฟล์
+        'filename' => pathinfo($filePath, PATHINFO_FILENAME),          // ชื่อไฟล์ไม่รวมสกุล
+        'document_root' => isset($_SERVER['DOCUMENT_ROOT']) ? $_SERVER['DOCUMENT_ROOT'] : '',  // document root ของเว็บเซิร์ฟเวอร์
+        'server_name' => isset($_SERVER['SERVER_NAME']) ? $_SERVER['SERVER_NAME'] : '',        // ชื่อเซิร์ฟเวอร์
+        'server_addr' => isset($_SERVER['SERVER_ADDR']) ? $_SERVER['SERVER_ADDR'] : '',        // IP เซิร์ฟเวอร์
+        'remote_addr' => isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : '',        // IP ไคลเอนต์
+        'folder_name' => $folder_name,                                  // รายชื่อโฟลเดอร์ตามลำดับชั้น
+    ];
+
     return $result;
 }
-?>
