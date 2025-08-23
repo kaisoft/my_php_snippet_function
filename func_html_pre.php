@@ -65,4 +65,4 @@ function html_pre($string_value = '') {
 
 // ตัวอย่างการใช้งาน
 // แสดง array $_SERVER ในรูปแบบอ่านง่าย พร้อมตกแต่งด้วย style
-echo html_pre(print_r($_SERVER, true));
+#echo html_pre(print_r($_SERVER, true));
