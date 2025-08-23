@@ -45,7 +45,7 @@ function array_to_string_builder($ar_param, $str_link = ':', $str_separate = ';'
  * </pre>
  */
 function html_pre($string_value = '') {
-    $this_style = array(
+    $this_style = [
         "padding" => "10px",
         "border-width" => "1px 1px 1px 5px",
         "border-style" => "solid",
@@ -53,11 +53,11 @@ function html_pre($string_value = '') {
         "margin" => "5px",
         "border-radius" => "7px",
         "background-color" => "rgba(128, 128, 128, 0.2)"
-    );
+    ];
     // แปลง array style เป็น string สำหรับ inline style CSS
     $styleString = array_to_string_builder($this_style, ":", ";");
     // สร้าง HTML string พร้อมครอบข้อความด้วย <pre>
-    $html = "<pre style=\"" . $styleString . "\" >";
+    $html = "<pre class=\"html_pre\" style=\"" . $styleString . "\" >";
     $html .= $string_value;
     $html .= "</pre>";
     return $html;
